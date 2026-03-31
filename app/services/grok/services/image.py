@@ -39,6 +39,51 @@ class ImageGenerationResult:
     usage_override: Optional[dict] = None
 
 
+def _image_upstream_status(item: Optional[dict]) -> int:
+    if not item:
+        return 502
+    status = item.get("status")
+    if isinstance(status, int) and status > 0:
+        return status
+    code = item.get("error_code") or ""
+    if code == "rate_limit_exceeded":
+        return 429
+    if code in {"forbidden", "access_denied"}:
+        return 403
+    return 502
+
+
+def _image_upstream_exception(item: dict) -> UpstreamException:
+    message = item.get("error") or "Upstream error"
+    code = item.get("error_code") or "upstream_error"
+    status = _image_upstream_status(item)
+    return UpstreamException(
+        message,
+        details={**item, "status": status, "error_code": code},
+        status_code=status,
+        code=code,
+    )
+
+
+def _prefer_image_exception(
+    current: Optional[UpstreamException], candidate: Optional[UpstreamException]
+) -> Optional[UpstreamException]:
+    if candidate is None:
+        return current
+    if current is None:
+        return candidate
+
+    current_status = _image_upstream_status(current.details)
+    candidate_status = _image_upstream_status(candidate.details)
+    if candidate_status == 429 and current_status != 429:
+        return candidate
+    if candidate_status == 403 and current_status not in {429, 403}:
+        return candidate
+    if current_status == 502 and candidate_status != 502:
+        return candidate
+    return current
+
+
 class ImageGenerationService:
     """Image generation orchestration service."""
 
@@ -247,7 +292,7 @@ class ImageGenerationService:
     ) -> ImageGenerationResult:
         if enable_nsfw is None:
             enable_nsfw = bool(get_config("image.nsfw"))
-        stream_retries = int(get_config("image.blocked_parallel_attempts") or 5) + 1
+        stream_retries = int(get_config("image.blocked_parallel_attempts") or 1) + 1
         stream_retries = max(1, min(stream_retries, 10))
         upstream = image_service.stream(
             token=token,
@@ -414,7 +459,7 @@ class ImageGenerationService:
         calls_needed = min(calls_needed, n)
 
         async def _fetch_batch(call_target: int, call_token: str):
-            stream_retries = int(get_config("image.blocked_parallel_attempts") or 5) + 1
+            stream_retries = int(get_config("image.blocked_parallel_attempts") or 1) + 1
             stream_retries = max(1, min(stream_retries, 10))
             upstream = image_service.stream(
                 token=call_token,
@@ -439,9 +484,12 @@ class ImageGenerationService:
             tasks.append(_fetch_batch(call_target, token))
 
         results = await asyncio.gather(*tasks, return_exceptions=True)
+        preferred_error: Optional[UpstreamException] = None
         for batch in results:
             if isinstance(batch, Exception):
                 logger.warning(f"WS batch failed: {batch}")
+                if isinstance(batch, UpstreamException):
+                    preferred_error = _prefer_image_exception(preferred_error, batch)
                 continue
             for img in batch:
                 if img not in seen:
@@ -456,7 +504,7 @@ class ImageGenerationService:
         # and only keep valid finals selected by ws_imagine classification.
         if len(all_images) < n:
             remaining = n - len(all_images)
-            extra_attempts = int(get_config("image.blocked_parallel_attempts") or 5)
+            extra_attempts = int(get_config("image.blocked_parallel_attempts") or 1)
             extra_attempts = max(0, min(extra_attempts, 10))
             parallel_enabled = bool(get_config("image.blocked_parallel_enabled", True))
             if extra_attempts > 0:
@@ -502,6 +550,10 @@ class ImageGenerationService:
                 for batch in extra_results:
                     if isinstance(batch, Exception):
                         logger.warning(f"WS recovery batch failed: {batch}")
+                        if isinstance(batch, UpstreamException):
+                            preferred_error = _prefer_image_exception(
+                                preferred_error, batch
+                            )
                         continue
                     for img in batch:
                         if img not in seen:
@@ -517,9 +569,16 @@ class ImageGenerationService:
                 )
 
         if len(all_images) < n:
+            if preferred_error and _image_upstream_status(preferred_error.details) in {
+                403,
+                429,
+            }:
+                raise preferred_error
             logger.error(
                 f"Image generation failed after recovery attempts: finals={len(all_images)}/{n}, "
-                f"blocked_parallel_attempts={int(get_config('image.blocked_parallel_attempts') or 5)}"
+                f"blocked_parallel_attempts={int(get_config('image.blocked_parallel_attempts') or 1)}, "
+                f"preferred_error_status={_image_upstream_status(preferred_error.details) if preferred_error else 'none'}, "
+                f"preferred_error_code={(preferred_error.details or {}).get('error_code') if preferred_error else 'none'}"
             )
             raise UpstreamException(
                 "Image generation blocked or no valid final image",
@@ -711,11 +770,12 @@ class ImageWSStreamProcessor(ImageWSBaseProcessor):
 
         async for item in response:
             if item.get("type") == "error":
-                message = item.get("error") or "Upstream error"
-                code = item.get("error_code") or "upstream_error"
-                status = item.get("status")
-                if code == "rate_limit_exceeded" or status == 429:
-                    raise UpstreamException(message, details=item)
+                exc = _image_upstream_exception(item)
+                message = exc.message
+                code = exc.code
+                status = exc.status_code
+                if code == "rate_limit_exceeded" or status in {403, 429}:
+                    raise exc
                 yield self._sse(
                     "error",
                     {
@@ -936,8 +996,7 @@ class ImageWSCollectProcessor(ImageWSBaseProcessor):
 
         async for item in response:
             if item.get("type") == "error":
-                message = item.get("error") or "Upstream error"
-                raise UpstreamException(message, details=item)
+                raise _image_upstream_exception(item)
             if item.get("type") != "image":
                 continue
             image_id = item.get("image_id")

@@ -22,7 +22,7 @@
 ```bash
 uv sync
 
-uv run granian --interface asgi --host 0.0.0.0 --port 8000 --workers 1 main:app
+uv run granian --interface asgi --host 0.0.0.0 --port 8222 --workers 1 main:app
 ```
 
 ### Docker Compose
@@ -64,7 +64,7 @@ docker compose up -d
 
 ## 管理面板
 
-- 访问地址：`http://<host>:<port>/admin`（本地运行使用 `SERVER_PORT`，Docker Compose 使用 `HOST_PORT`，默认均为 `8000`）
+- 访问地址：`http://<host>:<port>/admin`（本地运行使用 `SERVER_PORT`，Docker Compose 使用 `HOST_PORT`，默认均为 `8222`）
 - 默认密码：`grok2api`（配置项 `app.app_key`，建议修改）
 
 **功能说明**：
@@ -88,8 +88,8 @@ docker compose up -d
 | `LOG_FILE_ENABLED` | 是否启用文件日志 | `true` | `false` |
 | `DATA_DIR` | 数据目录（配置/Token/锁） | `./data` | `/data` |
 | `SERVER_HOST` | 服务监听地址 | `0.0.0.0` | `0.0.0.0` |
-| `SERVER_PORT` | 服务端口 | `8000` | `8000` |
-| `HOST_PORT` | Docker Compose 宿主机映射端口 | `8000` | `9000` |
+| `SERVER_PORT` | 服务端口 | `8222` | `8222` |
+| `HOST_PORT` | Docker Compose 宿主机映射端口 | `8222` | `9000` |
 | `SERVER_WORKERS` | 服务进程数量 | `1` | `2` |
 | `SERVER_STORAGE_TYPE` | 存储类型（`local`/`redis`/`mysql`/`pgsql`） | `local` | `pgsql` |
 | `SERVER_STORAGE_URL` | 存储连接串（local 时可为空） | `""` | `postgresql+asyncpg://user:password@host:5432/db` |
@@ -129,14 +129,14 @@ docker compose up -d
 
 ## 接口说明
 
-> 以下示例默认使用 `localhost:8000`；若 Docker Compose 设置了 `HOST_PORT`，请替换为对应端口。
+> 以下示例默认使用 `localhost:8222`；若 Docker Compose 设置了 `HOST_PORT`，请替换为对应端口。
 
 ### `POST /v1/chat/completions`
 
 > 通用接口，支持对话聊天、图像生成、图像编辑、视频生成、视频超分
 
 ```bash
-curl http://localhost:8000/v1/chat/completions \
+curl http://localhost:8222/v1/chat/completions \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $GROK2API_API_KEY" \
   -d '{
@@ -212,7 +212,7 @@ curl http://localhost:8000/v1/chat/completions \
 > OpenAI Responses API 兼容接口
 
 ```bash
-curl http://localhost:8000/v1/responses \
+curl http://localhost:8222/v1/responses \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $GROK2API_API_KEY" \
   -d '{
@@ -257,7 +257,7 @@ curl http://localhost:8000/v1/responses \
 > 图像生成接口
 
 ```bash
-curl http://localhost:8000/v1/images/generations \
+curl http://localhost:8222/v1/images/generations \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $GROK2API_API_KEY" \
   -d '{
@@ -299,7 +299,7 @@ curl http://localhost:8000/v1/images/generations \
 > 图像编辑接口（multipart/form-data）
 
 ```bash
-curl http://localhost:8000/v1/images/edits \
+curl http://localhost:8222/v1/images/edits \
   -H "Authorization: Bearer $GROK2API_API_KEY" \
   -F "model=grok-imagine-1.0-edit" \
   -F "prompt=把图片变清晰" \
@@ -339,7 +339,7 @@ curl http://localhost:8000/v1/images/edits \
 > 视频生成接口（OpenAI videos.create 兼容）
 
 ```bash
-curl http://localhost:8000/v1/videos \
+curl http://localhost:8222/v1/videos \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $GROK2API_API_KEY" \
   -d '{
@@ -444,7 +444,7 @@ curl http://localhost:8000/v1/videos \
 |  | `nsfw` | NSFW 模式 | WebSocket 请求是否启用 NSFW。 | `true` |
 |  | `medium_min_bytes` | 中等图最小字节 | 判定中等质量图的最小字节数。 | `30000` |
 |  | `final_min_bytes` | 最终图最小字节 | 判定最终图的最小字节数（通常 JPG > 100KB）。 | `100000` |
-|  | `blocked_parallel_attempts` | 并行补偿次数 | 遇到疑似审查/拦截时的并行补偿生成次数。 | `5` |
+|  | `blocked_parallel_attempts` | 并行补偿次数 | 遇到疑似审查/拦截时的并行补偿生成次数。号池较小或频繁遇到 429/403 时建议保持 `1`。 | `1` |
 |  | `blocked_parallel_enabled` | 并行补偿开关 | 是否启用并行补偿（启用时优先使用不同 token）。 | `true` |
 | **imagine_fast** | `n` | 生成数量 | 仅对 grok-imagine-1.0-fast 生效。 | `1` |
 |  | `size` | 图片尺寸 | `1280x720` / `720x1280` / `1792x1024` / `1024x1792` / `1024x1024` | `1024x1024` |

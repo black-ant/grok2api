@@ -223,6 +223,9 @@ class ImagineWebSocketReverse:
                 completed = 0
                 start_time = last_activity = time.monotonic()
                 medium_received_time: Optional[float] = None
+                largest_non_final_blob = 0
+                medium_count = 0
+                preview_count = 0
 
                 while time.monotonic() - start_time < timeout:
                     try:
@@ -236,7 +239,10 @@ class ImagineWebSocketReverse:
                         ):
                             logger.warning(
                                 "Imagine stream blocked suspected: received medium preview but no valid final image "
-                                f"within {blocked_grace:.1f}s (request_id={request_id})"
+                                f"within {blocked_grace:.1f}s (request_id={request_id}, "
+                                f"largest_non_final_blob={largest_non_final_blob}, "
+                                f"medium_count={medium_count}, preview_count={preview_count}, "
+                                f"final_min_bytes={final_min_bytes})"
                             )
                             raise _BlockedError()
                         if completed > 0 and now - last_activity > 10:
@@ -269,6 +275,14 @@ class ImagineWebSocketReverse:
                             image_id = info["image_id"]
                             if info["stage"] == "medium" and medium_received_time is None:
                                 medium_received_time = time.monotonic()
+                            if info["stage"] == "medium":
+                                medium_count += 1
+                            elif info["stage"] == "preview":
+                                preview_count += 1
+                            if not info["is_final"]:
+                                largest_non_final_blob = max(
+                                    largest_non_final_blob, info["blob_size"]
+                                )
 
                             if info["is_final"] and image_id not in final_ids:
                                 final_ids.add(image_id)
@@ -302,7 +316,9 @@ class ImagineWebSocketReverse:
                             logger.warning(
                                 "Imagine stream final-timeout suspected review/block: "
                                 f"no final image reached threshold in {final_timeout:.1f}s "
-                                f"(request_id={request_id})"
+                                f"(request_id={request_id}, largest_non_final_blob={largest_non_final_blob}, "
+                                f"medium_count={medium_count}, preview_count={preview_count}, "
+                                f"final_min_bytes={final_min_bytes})"
                             )
                             raise _BlockedError()
 
