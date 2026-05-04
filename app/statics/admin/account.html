@@ -1161,6 +1161,11 @@ function waitI18n() {
 (async () => {
   await waitI18n();
   applyAccountI18n();
+  try {
+    Object.keys(sessionStorage)
+      .filter(key => key.startsWith('grok2api.admin_header_html.'))
+      .forEach(key => sessionStorage.removeItem(key));
+  } catch {}
   await renderAdminHeader?.();
   await renderSiteFooter?.();
   initFilterMenu();
