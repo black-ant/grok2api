@@ -105,7 +105,6 @@ uv run granian --interface asgi --host 0.0.0.0 --port 8000 --workers 1 app.main:
 ```bash
 git clone https://github.com/chenyme/grok2api
 cd grok2api
-cp .env.example .env
 docker compose up -d
 ```
 
@@ -174,7 +173,6 @@ docker compose up -d
 | `SERVER_HOST` | Service bind address | `0.0.0.0` |
 | `SERVER_PORT` | Service port | `8000` |
 | `SERVER_WORKERS` | Granian worker count | `1` |
-| `HOST_PORT` | Docker Compose published host port | `8000` |
 | `DATA_DIR` | Local data root for accounts, locally cached media files, and cache indexes | `./data` |
 | `LOG_DIR` | Local log directory | `./logs` |
 | `ACCOUNT_STORAGE` | Account storage backend | `local` |

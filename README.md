@@ -106,7 +106,6 @@ uv run granian --interface asgi --host 0.0.0.0 --port 8000 --workers 1 app.main:
 ```bash
 git clone https://github.com/chenyme/grok2api
 cd grok2api
-cp .env.example .env
 docker compose up -d
 ```
 
@@ -175,7 +174,6 @@ docker compose up -d
 | `SERVER_HOST` | 服务监听地址 | `0.0.0.0` |
 | `SERVER_PORT` | 服务监听端口 | `8000` |
 | `SERVER_WORKERS` | Granian worker 数量 | `1` |
-| `HOST_PORT` | Docker Compose 宿主机映射端口 | `8000` |
 | `DATA_DIR` | 本地数据根目录（账号库、本地媒体文件、缓存索引统一位于此目录下） | `./data` |
 | `LOG_DIR` | 本地日志目录 | `./logs` |
 | `ACCOUNT_STORAGE` | 账号存储后端 | `local` |
