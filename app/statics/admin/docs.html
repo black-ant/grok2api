@@ -174,10 +174,14 @@ function renderError(message) {
   document.getElementById('model-rows').innerHTML = `<tr><td colspan="6" class="error-cell">${text}</td></tr>`;
 }
 
+function waitI18n() {
+  return new Promise((resolve) => window.I18n?.onReady(resolve) || resolve());
+}
+
 (async () => {
-  await waitI18n().catch(() => {});
-  await renderAdminHeader?.();
-  await renderSiteFooter?.();
+  await waitI18n();
+  await window.renderAdminHeader?.();
+  await window.renderSiteFooter?.();
 
   const key = await adminKey.get();
   if (!key || !await verifyKey(ADMIN_API + '/verify', key).catch(() => false)) {
@@ -194,7 +198,7 @@ function renderError(message) {
     renderModels(docs.models || []);
   } catch (e) {
     renderError(e.message);
-    showToast?.('连接文档加载失败', 'error');
+    window.showToast?.('连接文档加载失败', 'error');
   }
 })();
 </script>
