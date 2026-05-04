@@ -26,6 +26,7 @@ from app.control.account.commands import (
     ListAccountsQuery,
 )
 from app.control.account.enums import AccountStatus
+from app.control.account.refresh import RefreshResult
 
 if TYPE_CHECKING:
     from app.control.account.refresh import AccountRefreshService
@@ -162,25 +163,48 @@ async def save_tokens(
 ):
     """Full pool replace — accepts {pool_name: [token_objects]} dict."""
     total_upserted = 0
-    all_tokens: list[str] = []
+    refresh_tokens: list[str] = []
+    auto_tokens: list[str] = []
 
     for pool_name, items in req.root.items():
+        requested_pool = (pool_name or "basic").strip().lower()
         upserts = []
         for item in items:
             td = {"token": item} if isinstance(item, str) else item.model_dump()
             token_val = _sanitize(td.get("token", ""))
             if not token_val:
                 continue
-            upserts.append(AccountUpsert(token=token_val, pool=pool_name, tags=td.get("tags") or []))
+            upserts.append(AccountUpsert(token=token_val, pool=requested_pool, tags=td.get("tags") or []))
         if upserts:
-            await repo.replace_pool(BulkReplacePoolCommand(pool=pool_name, upserts=upserts))
-            all_tokens.extend(u.token for u in upserts)
+            if requested_pool == "auto":
+                await repo.upsert_accounts(upserts)
+                auto_tokens.extend(u.token for u in upserts)
+            else:
+                await repo.replace_pool(BulkReplacePoolCommand(pool=requested_pool, upserts=upserts))
+                refresh_tokens.extend(u.token for u in upserts)
             total_upserted += len(upserts)
 
     logger.info("admin tokens saved across pools: saved_count={}", total_upserted)
-    if all_tokens:
-        asyncio.create_task(_refresh_imported(refresh_svc, all_tokens))
-    return _json({"status": "success", "count": total_upserted})
+    auto_result = None
+    if auto_tokens:
+        try:
+            auto_result = await refresh_svc.refresh_on_import(auto_tokens, detect_pool=True)
+            logger.info(
+                "admin json auto-detect quota sync completed: token_count={} refreshed={} failed={}",
+                len(auto_tokens), auto_result.refreshed, auto_result.failed,
+            )
+        except Exception as exc:
+            logger.warning("admin json auto-detect quota sync failed: token_count={} error={}", len(auto_tokens), exc)
+            auto_result = RefreshResult(failed=len(auto_tokens), last_error=str(exc)[:300])
+    if refresh_tokens:
+        asyncio.create_task(_refresh_imported(refresh_svc, refresh_tokens))
+    return _json({
+        "status": "success",
+        "count": total_upserted,
+        "synced": bool(auto_tokens),
+        "sync_failed": auto_result.failed if auto_result is not None else 0,
+        "sync_error": auto_result.last_error if auto_result is not None else "",
+    })
 
 
 @router.post("/tokens/add")
@@ -208,35 +232,43 @@ async def add_tokens(
     existing = {r.token for r in await repo.get_accounts(cleaned) if not r.is_deleted()}
     new_tokens = [t for t in cleaned if t not in existing]
 
-    if not new_tokens:
+    result_count = 0
+    if new_tokens:
+        upserts = [AccountUpsert(token=t, pool=requested_pool, tags=req.tags) for t in new_tokens]
+        result = await repo.upsert_accounts(upserts)
+        result_count = result.upserted or len(new_tokens)
+        logger.info(
+            "admin tokens added: pool={} added_count={} skipped_count={}",
+            requested_pool,
+            len(new_tokens),
+            len(existing),
+        )
+    elif not sync_auto_detect:
         return _json({"status": "success", "count": 0, "skipped": len(cleaned)})
 
-    upserts = [AccountUpsert(token=t, pool=requested_pool, tags=req.tags) for t in new_tokens]
-    result = await repo.upsert_accounts(upserts)
-    logger.info(
-        "admin tokens added: pool={} added_count={} skipped_count={}",
-        requested_pool,
-        len(new_tokens),
-        len(existing),
-    )
-
+    refresh_result = None
     if sync_auto_detect:
         try:
-            refresh_result = await refresh_svc.refresh_on_import(new_tokens)
+            refresh_result = await refresh_svc.refresh_on_import(cleaned, detect_pool=True)
             logger.info(
                 "admin auto-detect quota sync completed: token_count={} refreshed={} failed={}",
-                len(new_tokens), refresh_result.refreshed, refresh_result.failed,
+                len(cleaned), refresh_result.refreshed, refresh_result.failed,
             )
         except Exception as exc:
-            logger.warning("admin auto-detect quota sync failed: token_count={} error={}", len(new_tokens), exc)
-    else:
+            logger.warning("admin auto-detect quota sync failed: token_count={} error={}", len(cleaned), exc)
+            refresh_result = RefreshResult(failed=len(cleaned), last_error=str(exc)[:300])
+    elif new_tokens:
         asyncio.create_task(_refresh_imported(refresh_svc, new_tokens))
 
     return _json({
         "status": "success",
-        "count": result.upserted or len(new_tokens),
+        "count": result_count,
         "skipped": len(existing),
         "synced": sync_auto_detect,
+        "sync_checked": refresh_result.checked if refresh_result is not None else 0,
+        "sync_refreshed": refresh_result.refreshed if refresh_result is not None else 0,
+        "sync_failed": refresh_result.failed if refresh_result is not None else 0,
+        "sync_error": refresh_result.last_error if refresh_result is not None else "",
     })
 
 

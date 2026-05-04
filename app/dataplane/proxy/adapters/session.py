@@ -8,6 +8,7 @@ from curl_cffi.const import CurlOpt
 
 from app.platform.config.snapshot import get_config
 from app.platform.errors import UpstreamError
+from app.control.proxy.config import resolve_egress_config
 from app.control.proxy.models import ProxyLease
 from app.dataplane.proxy.adapters.profile import resolve_proxy_profile
 
@@ -15,8 +16,7 @@ from app.dataplane.proxy.adapters.profile import resolve_proxy_profile
 def _skip_proxy_ssl(proxy_url: str) -> bool:
     if not proxy_url:
         return False
-    cfg = get_config()
-    return cfg.get_bool("proxy.egress.skip_ssl_verify", False)
+    return resolve_egress_config(get_config()).skip_ssl_verify
 
 
 def normalize_proxy_url(url: str) -> str:

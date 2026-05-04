@@ -8,7 +8,6 @@ Layout:
 """
 
 import json
-from typing import Any
 
 from app.platform.runtime.clock import now_ms
 from ..commands import AccountPatch, AccountUpsert, BulkReplacePoolCommand, ListAccountsQuery
@@ -64,6 +63,7 @@ class RedisAccountRepository:
             "quota_fast":       json.dumps(qs.fast.to_dict()),
             "quota_expert":     json.dumps(qs.expert.to_dict()),
             "quota_heavy":      json.dumps(qs.heavy.to_dict()) if qs.heavy else "{}",
+            "quota_grok_4_3":   json.dumps(qs.grok_4_3.to_dict()) if qs.grok_4_3 else "{}",
             "usage_use_count":  str(record.usage_use_count),
             "usage_fail_count": str(record.usage_fail_count),
             "usage_sync_count": str(record.usage_sync_count),
@@ -102,6 +102,9 @@ class RedisAccountRepository:
                 **({
                     "heavy": json.loads(_s("quota_heavy"))
                 } if _s("quota_heavy") and _s("quota_heavy") != "{}" else {}),
+                **({
+                    "grok_4_3": json.loads(_s("quota_grok_4_3"))
+                } if _s("quota_grok_4_3") and _s("quota_grok_4_3") != "{}" else {}),
             },
             "usage_use_count":  int(_s("usage_use_count")  or 0),
             "usage_fail_count": int(_s("usage_fail_count") or 0),
@@ -217,6 +220,11 @@ class RedisAccountRepository:
                 updated_at = ts,
             )
             key = _record_key(token)
+            old_pool = await self._r.hget(key, "pool")
+            if isinstance(old_pool, bytes):
+                old_pool = old_pool.decode()
+            if old_pool and old_pool != pool:
+                await self._r.srem(_pool_key(str(old_pool)), token)
             await self._r.hset(key, mapping=self._to_hash(record, rev))
             await self._r.sadd(_pool_key(pool), token)
             await self._r.zadd(_KEY_REV_LOG, {token: rev})
@@ -238,7 +246,6 @@ class RedisAccountRepository:
             if not h:
                 continue
             record = self._from_hash(patch.token, h)
-            qs = record.quota_set()
 
             updates: dict[str, str] = {
                 "updated_at": str(ts),
@@ -268,6 +275,8 @@ class RedisAccountRepository:
                 updates["quota_expert"] = json.dumps(patch.quota_expert)
             if patch.quota_heavy is not None:
                 updates["quota_heavy"] = json.dumps(patch.quota_heavy)
+            if patch.quota_grok_4_3 is not None:
+                updates["quota_grok_4_3"] = json.dumps(patch.quota_grok_4_3)
 
             # Usage counters.
             if patch.usage_use_delta is not None:
@@ -306,6 +315,9 @@ class RedisAccountRepository:
             updates["ext"] = json.dumps(ext)
 
             await self._r.hset(key, mapping=updates)
+            if patch.pool is not None and patch.pool != record.pool:
+                await self._r.srem(_pool_key(record.pool), patch.token)
+                await self._r.sadd(_pool_key(patch.pool), patch.token)
             await self._r.zadd(_KEY_REV_LOG, {patch.token: rev})
             count += 1
         return AccountMutationResult(patched=count, revision=rev)

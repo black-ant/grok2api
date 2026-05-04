@@ -1701,9 +1701,17 @@ async function doImport() {
     if (!total) return showToast(tr('account.jsonEmpty', null, 'JSON 文件中没有可导入的 Token'), 'error');
     try {
       showToast(tr('account.importing', { n: total }, `正在导入 ${total} 个账户…`), 'info');
-      await _api('POST', '/tokens', parsed);
+      const d = await _api('POST', '/tokens', parsed);
       closeModal('modal-import-file');
-      showToast(tr('account.importJsonDone', { n: total }, `导入完成，共 ${total} 个`), 'success');
+      const failed = d.sync_failed || 0;
+      const msg = tr('account.importJsonDone', { n: total }, `导入完成，共 ${total} 个`);
+      const detail = d.sync_error ? `：${d.sync_error}` : '';
+      showToast(
+        failed
+          ? `${msg}，${tr('account.autoDetectFailed', { n: failed }, `${failed} 个自动检测失败`)}${detail}`
+          : msg,
+        failed ? 'error' : 'success'
+      );
       load();
     } catch (e) { showToast(`${tr('account.importFailed', null, '导入失败')}: ${e.message}`, 'error'); }
   } else {
@@ -1761,7 +1769,14 @@ async function saveTokens(pool, newToks, modalId, pendingMessage, successPrefix,
     const msg = d.skipped
       ? tr('account.saveResultSkipped', { prefix: successPrefix, count: d.count, skipped: d.skipped }, `${successPrefix}，新增 ${d.count}，已存在跳过 ${d.skipped}`)
       : tr('account.saveResult', { prefix: successPrefix, count: d.count }, `${successPrefix}，新增 ${d.count} 个`);
-    showToast(msg, 'success');
+    const failed = d.sync_failed || 0;
+    const detail = d.sync_error ? `：${d.sync_error}` : '';
+    showToast(
+      failed
+        ? `${msg}，${tr('account.autoDetectFailed', { n: failed }, `${failed} 个自动检测失败`)}${detail}`
+        : msg,
+      failed ? 'error' : 'success'
+    );
     load();
   } catch (e) { showToast(`${errorPrefix}: ${e.message}`, 'error'); }
 }

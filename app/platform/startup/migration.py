@@ -52,6 +52,7 @@ async def run_startup_migrations(
 ) -> None:
     """Run all first-boot migrations.  Safe to call on every startup."""
     await _migrate_config(config_backend)
+    await _migrate_legacy_proxy_config(config_backend)
     await _migrate_basic_refresh_interval(config_backend)
     await _migrate_accounts(account_repo)
     await _backfill_grok_4_3_quota(account_repo)
@@ -107,6 +108,39 @@ async def _migrate_basic_refresh_interval(backend: "ConfigBackend") -> None:
         return
     await backend.apply_patch({"account": {"refresh": {"basic_interval_sec": 86_400}}})
     logger.info("config: updated basic refresh interval default from 36000s to 86400s")
+
+
+async def _migrate_legacy_proxy_config(backend: "ConfigBackend") -> None:
+    data = await backend.load()
+    proxy = data.get("proxy", {}) if isinstance(data, dict) else {}
+    if not isinstance(proxy, dict):
+        return
+
+    egress = proxy.get("egress", {})
+    if not isinstance(egress, dict):
+        egress = {}
+
+    patch: dict = {"proxy": {"egress": {}}}
+    target = patch["proxy"]["egress"]
+
+    base_proxy_url = proxy.get("base_proxy_url")
+    asset_proxy_url = proxy.get("asset_proxy_url")
+    enabled = bool(proxy.get("enabled", False))
+
+    if base_proxy_url and not egress.get("proxy_url"):
+        target["proxy_url"] = base_proxy_url
+    if asset_proxy_url and not egress.get("resource_proxy_url"):
+        target["resource_proxy_url"] = asset_proxy_url
+    if (enabled or base_proxy_url) and base_proxy_url and egress.get("mode") in (None, "", "direct"):
+        target["mode"] = "single_proxy"
+    if "skip_proxy_ssl_verify" in proxy and "skip_ssl_verify" not in egress:
+        target["skip_ssl_verify"] = bool(proxy.get("skip_proxy_ssl_verify"))
+
+    if not target:
+        return
+
+    await backend.apply_patch(patch)
+    logger.info("config: migrated legacy proxy settings to proxy.egress")
 
 
 # ---------------------------------------------------------------------------

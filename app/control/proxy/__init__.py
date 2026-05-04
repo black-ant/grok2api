@@ -12,7 +12,7 @@ from app.platform.logging.logger import logger
 from app.platform.config.snapshot import get_config
 from app.platform.runtime.clock import now_ms
 from app.platform.runtime.ids import next_hex
-from .config import resolve_clearance_config
+from .config import resolve_clearance_config, resolve_egress_config
 from .models import (
     EgressMode,
     ClearanceMode,
@@ -66,14 +66,15 @@ class ProxyDirectory:
     async def load(self) -> None:
         """Load proxy configuration from the current config snapshot."""
         cfg = get_config()
-        egress_mode = EgressMode(cfg.get_str("proxy.egress.mode", "direct"))
+        egress = resolve_egress_config(cfg)
+        egress_mode = EgressMode(egress.mode)
         clearance_mode = ClearanceMode.parse(
             cfg.get_str("proxy.clearance.mode", "none")
         )
-        base_url = cfg.get_str("proxy.egress.proxy_url", "")
-        res_url = cfg.get_str("proxy.egress.resource_proxy_url", "")
-        base_pool = tuple(cfg.get_list("proxy.egress.proxy_pool", []))
-        res_pool = tuple(cfg.get_list("proxy.egress.resource_proxy_pool", []))
+        base_url = egress.proxy_url
+        res_url = egress.resource_proxy_url
+        base_pool = tuple(egress.proxy_pool or [])
+        res_pool = tuple(egress.resource_proxy_pool or [])
         clearance = resolve_clearance_config(cfg)
         config_sig = (
             egress_mode.value,

@@ -14,6 +14,16 @@ class ClearanceConfig:
     browser: str = ""
 
 
+@dataclass(frozen=True)
+class EgressConfig:
+    mode: str = "direct"
+    proxy_url: str = ""
+    resource_proxy_url: str = ""
+    proxy_pool: list[str] | None = None
+    resource_proxy_pool: list[str] | None = None
+    skip_ssl_verify: bool = False
+
+
 def _cfg_str(cfg: Any, key: str) -> str:
     value = cfg.get_str(key, "")
     return value if value.strip() else ""
@@ -53,4 +63,39 @@ def resolve_clearance_config(cfg: Any | None = None) -> ClearanceConfig:
     )
 
 
-__all__ = ["ClearanceConfig", "first_config_str", "resolve_clearance_config"]
+def resolve_egress_config(cfg: Any | None = None) -> EgressConfig:
+    cfg = cfg or get_config()
+    mode = cfg.get_str("proxy.egress.mode", "direct").strip().lower() or "direct"
+    proxy_url = first_config_str(cfg, "proxy.egress.proxy_url", "proxy.base_proxy_url")
+    resource_proxy_url = first_config_str(
+        cfg, "proxy.egress.resource_proxy_url", "proxy.asset_proxy_url"
+    )
+    proxy_pool = cfg.get_list("proxy.egress.proxy_pool", [])
+    resource_proxy_pool = cfg.get_list("proxy.egress.resource_proxy_pool", [])
+
+    if mode == "direct" and (proxy_url or proxy_pool or cfg.get_bool("proxy.enabled", False)):
+        if proxy_pool:
+            mode = "proxy_pool"
+        elif proxy_url:
+            mode = "single_proxy"
+
+    return EgressConfig(
+        mode=mode,
+        proxy_url=proxy_url,
+        resource_proxy_url=resource_proxy_url,
+        proxy_pool=proxy_pool,
+        resource_proxy_pool=resource_proxy_pool,
+        skip_ssl_verify=cfg.get_bool(
+            "proxy.egress.skip_ssl_verify",
+            cfg.get_bool("proxy.skip_proxy_ssl_verify", False),
+        ),
+    )
+
+
+__all__ = [
+    "ClearanceConfig",
+    "EgressConfig",
+    "first_config_str",
+    "resolve_clearance_config",
+    "resolve_egress_config",
+]

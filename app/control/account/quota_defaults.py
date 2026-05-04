@@ -159,16 +159,41 @@ def normalize_quota_set(pool: str, quota_set: AccountQuotaSet) -> AccountQuotaSe
     return qs
 
 
-def infer_pool(windows: dict[int, QuotaWindow]) -> str:
+def infer_pool(windows: dict[int, QuotaWindow], *, fallback: str = "basic") -> str:
     """Infer pool type from live quota windows returned by the rate-limits API.
 
     Uses ``auto.total`` (mode_id=0) as the discriminating signal.
-    Falls back to ``"basic"`` when the value is absent or unrecognised.
+    Falls back to *fallback* when no reliable signal is present.
     """
     auto_win = windows.get(0)
-    if auto_win is None:
-        return "basic"
-    return _AUTO_TOTAL_TO_POOL.get(auto_win.total, "basic")
+    if auto_win is not None and auto_win.total in _AUTO_TOTAL_TO_POOL:
+        return _AUTO_TOTAL_TO_POOL[auto_win.total]
+
+    fast_win = windows.get(1)
+    if fast_win is not None:
+        if fast_win.total >= HEAVY_QUOTA_DEFAULTS.fast.total:
+            return "heavy"
+        if fast_win.total >= SUPER_QUOTA_DEFAULTS.fast.total:
+            return "super"
+        if fast_win.total == BASIC_FAST_LIMIT:
+            return "basic"
+
+    heavy_win = windows.get(3)
+    if heavy_win is not None and heavy_win.total > 0:
+        return "heavy"
+
+    expert_win = windows.get(2)
+    grok_4_3_win = windows.get(4)
+    if expert_win is not None and expert_win.total >= HEAVY_QUOTA_DEFAULTS.expert.total:
+        return "heavy"
+    if grok_4_3_win is not None and grok_4_3_win.total >= HEAVY_QUOTA_DEFAULTS.grok_4_3.total:
+        return "heavy"
+    if expert_win is not None and expert_win.total >= SUPER_QUOTA_DEFAULTS.expert.total:
+        return "super"
+    if grok_4_3_win is not None and grok_4_3_win.total >= SUPER_QUOTA_DEFAULTS.grok_4_3.total:
+        return "super"
+
+    return fallback if fallback in _POOL_DEFAULTS else "basic"
 
 
 __all__ = [
