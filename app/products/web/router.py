@@ -50,6 +50,10 @@ async def admin_login():
 async def admin_account():
     return _serve_html("admin/account.html")
 
+@router.get("/admin/docs", include_in_schema=False)
+async def admin_docs():
+    return _serve_html("admin/docs.html")
+
 @router.get("/admin/config", include_in_schema=False)
 async def admin_config():
     return _serve_html("admin/config.html")

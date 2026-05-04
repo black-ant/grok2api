@@ -238,11 +238,14 @@ async def batch_refresh(
     req: BatchRequest,
     async_mode: bool = Query(False, alias="async"),
     concurrency: int | None = Query(None, ge=1),
+    repo: "AccountRepository" = Depends(get_repo),
     refresh_svc: "AccountRefreshService" = Depends(get_refresh_svc),
 ):
     tokens = [t.strip() for t in req.tokens if t.strip()]
     if not tokens:
-        raise ValidationError("No tokens provided", param="tokens")
+        tokens = await _list_all_tokens(repo)
+    if not tokens:
+        raise ValidationError("No tokens available", param="tokens")
 
     async def _refresh_one(token: str) -> dict:
         result = await refresh_svc.refresh_tokens([token])

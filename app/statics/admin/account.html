@@ -66,6 +66,10 @@
       background:#f3f3f3;
       border-color:#dcdcdc;
     }
+    .page-action-btn:disabled {
+      opacity:.45;
+      pointer-events:none;
+    }
     .page-action-btn-primary {
       background:#111;
       border-color:#111;
@@ -724,6 +728,10 @@
       <div class="page-sub" data-i18n="account.pageSubtitle">管理 Grok2API 的 xAI 服务账户池。</div>
     </div>
     <div class="page-actions">
+      <button onclick="refreshAllAccounts()" id="btn-refresh-all" class="page-action-btn">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 11a8 8 0 0 0-14.6-4.6"/><path d="M4 4v5h5"/><path d="M4 13a8 8 0 0 0 14.6 4.6"/><path d="M20 20v-5h-5"/></svg>
+        <span data-i18n="account.actionRefreshAllShort">全量刷新</span>
+      </button>
       <button onclick="openImport()" class="page-action-btn">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
         <span data-i18n="account.actionImportShort">导入</span>
@@ -1123,6 +1131,7 @@ function applyAccountI18n() {
   const toolbarTips = [
     ['btn-filter', 'account.filter', '筛选'],
     ['btn-export', 'account.export', '导出数据'],
+    ['btn-refresh-all', 'account.actionRefreshAllShort', '全量刷新'],
     ['btn-nsfw', 'account.batchNsfw', '开启 NSFW'],
     ['btn-refresh', 'account.batchRefresh', '刷新选中'],
     ['btn-disable', 'account.batchDisable', '禁用选中'],
@@ -1213,6 +1222,7 @@ function render() {
   renderStats(view);
   renderFilters(view);
   renderTable(view);
+  updateRefreshAllBtn();
   applyStrategyUI();
 }
 
@@ -1592,6 +1602,18 @@ function updateBatchBtns() {
     document.getElementById(id).style.display = show ? '' : 'none');
 }
 
+function getRefreshableTokens() {
+  return allTokens
+    .filter(t => !isDisabledStatus(t.status) && !isInvalidStatus(t.status))
+    .map(t => t.token)
+    .filter(Boolean);
+}
+
+function updateRefreshAllBtn() {
+  const btn = document.getElementById('btn-refresh-all');
+  if (btn) btn.disabled = !getRefreshableTokens().length;
+}
+
 // ── Helpers ────────────────────────────────────────────────────────────────
 function $(id, v) { const el = document.getElementById(id); if (el) el.textContent = v; }
 function fmt(n) { return n >= 10000 ? (n/1000).toFixed(1)+'k' : n; }
@@ -1834,8 +1856,10 @@ let _batchEs     = null;
 
 async function _runBatch(endpoint, tokens, label, onDone) {
   const btnCancel = document.getElementById('btn-batch-cancel');
+  const btnRefreshAll = document.getElementById('btn-refresh-all');
   ['btn-nsfw','btn-refresh','btn-disable','btn-restore','btn-delete'].forEach(id =>
     document.getElementById(id).style.display = 'none');
+  if (btnRefreshAll) btnRefreshAll.disabled = true;
   btnCancel.style.display = '';
 
   const progress = showProgressToast(label);
@@ -1843,7 +1867,9 @@ async function _runBatch(endpoint, tokens, label, onDone) {
 
   function _cleanup() {
     btnCancel.style.display = 'none';
+    if (btnRefreshAll) btnRefreshAll.disabled = false;
     updateBatchBtns();
+    updateRefreshAllBtn();
   }
   function _done(es) {
     _finalReceived = true;
@@ -1997,6 +2023,22 @@ async function batchRefreshSel() {
   await _runBatch('/batch/refresh', [...sel],
     tr('account.refreshing', { n: sel.size }, `正在刷新 ${sel.size} 个账户…`),
     (ok, fail) => showToast(tr('account.refreshDone', { ok, fail }, `刷新完成：成功 ${ok}，失败 ${fail}`), 'success')
+  );
+}
+
+async function refreshAllAccounts() {
+  const tokens = getRefreshableTokens();
+  if (!tokens.length) {
+    showToast(tr('account.refreshAllEmpty', null, '没有可刷新的账户'), 'info');
+    return;
+  }
+  openConfirm(
+    tr('account.refreshAllConfirmTitle', null, '全量刷新'),
+    tr('account.refreshAllConfirmBody', { n: tokens.length }, `确认刷新全部 <b>${tokens.length}</b> 个账户的额度信息？`),
+    async () => _runBatch('/batch/refresh', [],
+      tr('account.refreshingAll', { n: tokens.length }, `正在刷新全部 ${tokens.length} 个账户…`),
+      (ok, fail) => showToast(tr('account.refreshDone', { ok, fail }, `刷新完成：成功 ${ok}，失败 ${fail}`), fail > 0 ? 'error' : 'success')
+    )
   );
 }
 

@@ -128,6 +128,7 @@
     }
   },
   "header": {
+    "docs": "Documentation de connexion",
     "account": "Gestion des Comptes",
     "config": "Gestion de la Configuration",
     "cache": "Gestion du Cache",

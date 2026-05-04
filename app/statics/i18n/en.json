@@ -17,6 +17,7 @@
     "goToAdmin": "Go to Admin Panel"
   },
   "header": {
+    "docs": "Connection Docs",
     "account": "Account Management",
     "config": "Configuration Management",
     "cache": "Cache Management",
@@ -154,6 +155,7 @@
     "actionImport": "Import Accounts",
     "actionAdd": "Add Account",
     "actionImportShort": "Import",
+    "actionRefreshAllShort": "Refresh All",
     "actionAddShort": "Add",
     "sectionOverview": "Overview",
     "sectionTable": "Account List",
@@ -259,8 +261,12 @@
     "deleteDone": "Deleted {n}",
     "deleteFailed": "Delete failed",
     "refreshing": "Refreshing quota data for {n} accounts…",
+    "refreshingAll": "Refreshing quota data for all {n} accounts…",
     "refreshDone": "Refresh completed: {ok} succeeded, {fail} failed",
     "refreshFailed": "Refresh failed",
+    "refreshAllEmpty": "No refreshable accounts",
+    "refreshAllConfirmTitle": "Refresh All",
+    "refreshAllConfirmBody": "Refresh quota data for all <b>{n}</b> accounts?",
     "disableConfirmTitle": "Disable Account",
     "disableConfirmBody": "Disable {token}?<br><small style=\"color:var(--fg-muted)\">The account will be removed from request allocation until it is restored.</small>",
     "disablingOne": "Disabling account…",

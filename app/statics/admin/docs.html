@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Grok2API - 连接文档</title>
+  <link rel="icon" href="/favicon.ico?v={{APP_VERSION}}">
+  <link href="https://cdn.jsdelivr.net/npm/geist@1.0.0/dist/fonts/geist-sans/style.css" rel="stylesheet">
+  <link href="/static/css/app.css?v={{APP_VERSION}}" rel="stylesheet">
+  <style>
+    body { background:#FAF9F5 }
+    .page-hd { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; margin-bottom:20px }
+    .page-title { font-size:22px; font-weight:700; line-height:1.2 }
+    .section-head { display:flex; align-items:center; justify-content:space-between; gap:12px; margin:24px 0 10px }
+    .section-title { font-size:13px; font-weight:600; color:#222; letter-spacing:.01em }
+    .base-url { font-size:12px; color:#666; font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace }
+    .docs-grid { display:grid; grid-template-columns:minmax(280px,.72fr) minmax(360px,1.28fr); gap:12px }
+    .docs-table { width:100%; border-collapse:collapse }
+    .docs-table th { background:#fff; font-size:11px; font-weight:600; color:#8f8f8f; padding:11px 14px; border-bottom:1px solid #f0f0f0; text-transform:none; letter-spacing:0 }
+    .docs-table td { font-size:12px; color:#3f3f3f; padding:12px 14px; border-bottom:1px solid #f4f4f4; vertical-align:top }
+    .docs-table tr:last-child td { border-bottom:none }
+    .docs-table code, .code-block { font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:12px }
+    .code-block { margin:12px 0 0; padding:14px; border-radius:14px; background:#111; color:#f7f7f7; overflow:auto; white-space:pre; line-height:1.55 }
+    .muted { color:#8a8a8a }
+    .badge-doc { display:inline-flex; align-items:center; height:22px; padding:0 8px; border-radius:999px; background:#f5f5f5; color:#555; font-size:11px; font-weight:600; white-space:nowrap }
+    .badge-doc.chat { background:#eef2ff; color:#4f46e5 }
+    .badge-doc.image { background:#eff6ff; color:#2563eb }
+    .badge-doc.edit { background:#faf5ff; color:#7c3aed }
+    .badge-doc.video { background:#fff7ed; color:#ea580c }
+    .table-card.docs-card { border:none; border-radius:14px; background:#fff }
+    .model-id { font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:12px; color:#222; white-space:nowrap }
+    .loading-cell, .error-cell { text-align:center; color:#999; padding:32px 14px !important }
+    .error-cell { color:#dc2626 }
+    @media (max-width: 920px) {
+      .docs-grid { grid-template-columns:1fr }
+      .page-hd { flex-direction:column; align-items:stretch }
+    }
+  </style>
+</head>
+<body>
+
+<div id="admin-header" data-active="/admin/docs"></div>
+
+<main class="admin-main" style="padding-bottom:60px">
+  <div class="page-hd">
+    <div class="page-title">连接文档</div>
+    <div class="base-url" id="base-url">/v1</div>
+  </div>
+
+  <section>
+    <div class="section-head">
+      <div class="section-title">调用方式</div>
+    </div>
+    <div class="docs-grid">
+      <div class="table-card docs-card">
+        <table class="docs-table">
+          <thead>
+            <tr><th>项目</th><th>值</th></tr>
+          </thead>
+          <tbody id="connection-rows">
+            <tr><td colspan="2" class="loading-cell">加载中…</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="table-card docs-card">
+        <table class="docs-table">
+          <thead>
+            <tr><th>接口</th><th>用途</th><th>请求体</th></tr>
+          </thead>
+          <tbody id="endpoint-rows">
+            <tr><td colspan="3" class="loading-cell">加载中…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <pre class="code-block" id="curl-example"></pre>
+  </section>
+
+  <section>
+    <div class="section-head">
+      <div class="section-title">模型列表</div>
+      <div class="muted" id="model-count">—</div>
+    </div>
+    <div class="table-card docs-card">
+      <table class="docs-table">
+        <thead>
+          <tr>
+            <th>模型 ID</th>
+            <th>展示名</th>
+            <th>能力</th>
+            <th>模式</th>
+            <th>账户池</th>
+            <th>主要接口</th>
+          </tr>
+        </thead>
+        <tbody id="model-rows">
+          <tr><td colspan="6" class="loading-cell">加载中…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+</main>
+
+<script src="/static/js/i18n.js?v={{APP_VERSION}}"></script>
+<script src="/static/js/auth.js?v={{APP_VERSION}}"></script>
+<script src="/static/js/admin-header.js?v={{APP_VERSION}}"></script>
+<script src="/static/js/toast.js?v={{APP_VERSION}}"></script>
+<script src="/static/js/footer.js?v={{APP_VERSION}}"></script>
+<script>
+function esc(value) {
+  return String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function code(value) {
+  return `<code>${esc(value)}</code>`;
+}
+
+function capabilityBadge(model) {
+  const cls = model.capability_key || 'chat';
+  return `<span class="badge-doc ${esc(cls)}">${esc(model.capability)}</span>`;
+}
+
+async function adminGet(path, key) {
+  const res = await fetch(ADMIN_API + path, {
+    headers: { Authorization: 'Bearer ' + key },
+    cache: 'no-store',
+  });
+  if (!res.ok) throw new Error(await res.text() || res.statusText);
+  return res.json();
+}
+
+function renderConnection(baseUrl) {
+  document.getElementById('base-url').textContent = baseUrl;
+  document.getElementById('connection-rows').innerHTML = [
+    ['基础地址', code(baseUrl)],
+    ['鉴权', code('Authorization: Bearer <API_KEY>')],
+    ['Anthropic 鉴权', code('X-API-Key: <API_KEY>')],
+    ['默认格式', code('Content-Type: application/json')],
+    ['文件上传', code('multipart/form-data')],
+  ].map(([name, value]) => `<tr><td>${name}</td><td>${value}</td></tr>`).join('');
+
+  document.getElementById('curl-example').textContent = `curl ${baseUrl}/chat/completions \\
+  -H "Authorization: Bearer <API_KEY>" \\
+  -H "Content-Type: application/json" \\
+  -d '{"model":"grok-4.20-fast","messages":[{"role":"user","content":"你好"}],"stream":true}'`;
+}
+
+function renderEndpoints(endpoints) {
+  document.getElementById('endpoint-rows').innerHTML = endpoints.map((item) => `
+    <tr>
+      <td>${code(item.method + ' ' + item.path)}</td>
+      <td>${esc(item.purpose)}</td>
+      <td>${esc(item.body)}</td>
+    </tr>`).join('');
+}
+
+function renderModels(models) {
+  document.getElementById('model-count').textContent = `${models.length} 个模型`;
+  document.getElementById('model-rows').innerHTML = models.map((model) => `
+    <tr>
+      <td class="model-id">${esc(model.id)}</td>
+      <td>${esc(model.name)}</td>
+      <td>${capabilityBadge(model)}</td>
+      <td>${code(model.mode)}</td>
+      <td>${esc(model.pools)}</td>
+      <td>${code(model.endpoint)}</td>
+    </tr>`).join('');
+}
+
+function renderError(message) {
+  const text = esc(message || '加载失败');
+  document.getElementById('connection-rows').innerHTML = `<tr><td colspan="2" class="error-cell">${text}</td></tr>`;
+  document.getElementById('endpoint-rows').innerHTML = `<tr><td colspan="3" class="error-cell">${text}</td></tr>`;
+  document.getElementById('model-rows').innerHTML = `<tr><td colspan="6" class="error-cell">${text}</td></tr>`;
+}
+
+(async () => {
+  await waitI18n().catch(() => {});
+  await renderAdminHeader?.();
+  await renderSiteFooter?.();
+
+  const key = await adminKey.get();
+  if (!key || !await verifyKey(ADMIN_API + '/verify', key).catch(() => false)) {
+    location.href = '/admin/login';
+    return;
+  }
+
+  const baseUrl = `${location.origin}/v1`;
+  renderConnection(baseUrl);
+
+  try {
+    const docs = await adminGet('/docs', key);
+    renderEndpoints(docs.endpoints || []);
+    renderModels(docs.models || []);
+  } catch (e) {
+    renderError(e.message);
+    showToast?.('连接文档加载失败', 'error');
+  }
+})();
+</script>
+</body>
+</html>

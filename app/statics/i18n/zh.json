@@ -17,6 +17,7 @@
     "goToAdmin": "进入管理后台"
   },
   "header": {
+    "docs": "连接文档",
     "account": "账户管理",
     "config": "配置管理",
     "cache": "缓存管理",
@@ -154,6 +155,7 @@
     "actionImport": "导入账户",
     "actionAdd": "新增账户",
     "actionImportShort": "导入",
+    "actionRefreshAllShort": "全量刷新",
     "actionAddShort": "新增",
     "sectionOverview": "概览",
     "sectionTable": "账户列表",
@@ -259,8 +261,12 @@
     "deleteDone": "已删除 {n} 个",
     "deleteFailed": "删除失败",
     "refreshing": "正在刷新 {n} 个账户的额度信息…",
+    "refreshingAll": "正在刷新全部 {n} 个账户的额度信息…",
     "refreshDone": "刷新完成：成功 {ok} 个，失败 {fail} 个",
     "refreshFailed": "刷新失败",
+    "refreshAllEmpty": "没有可刷新的账户",
+    "refreshAllConfirmTitle": "全量刷新",
+    "refreshAllConfirmBody": "确认刷新全部 <b>{n}</b> 个账户的额度信息？",
     "disableConfirmTitle": "禁用账号",
     "disableConfirmBody": "确认禁用 {token}？<br><small style=\"color:var(--fg-muted)\">禁用后该账号不会参与请求分配。</small>",
     "disablingOne": "正在禁用账号…",

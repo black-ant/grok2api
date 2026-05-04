@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import Response
 from pydantic import RootModel
 
+from app.control.model import registry as model_registry
 from app.control.account.backends.factory import get_repository_backend
 from app.platform.auth.middleware import verify_admin_key
 from app.platform.config.snapshot import config
@@ -160,6 +161,43 @@ def get_refresh_svc(request: Request) -> "AccountRefreshService":
 router = APIRouter(prefix="/admin/api", dependencies=[Depends(verify_admin_key)])
 _TAG_ADMIN_SYSTEM = "Admin - System"
 
+_POOL_LABELS = {0: "basic", 1: "super", 2: "heavy"}
+
+_DOC_ENDPOINTS = (
+    {"method": "GET", "path": "/v1/models", "purpose": "获取当前可用模型", "body": "无"},
+    {"method": "GET", "path": "/v1/models/{model_id}", "purpose": "查看单个模型", "body": "无"},
+    {"method": "POST", "path": "/v1/chat/completions", "purpose": "OpenAI Chat 兼容", "body": "model, messages, stream"},
+    {"method": "POST", "path": "/v1/responses", "purpose": "OpenAI Responses 兼容", "body": "model, input, stream"},
+    {"method": "POST", "path": "/v1/messages", "purpose": "Anthropic Messages 兼容", "body": "model, messages, stream"},
+    {"method": "POST", "path": "/v1/images/generations", "purpose": "图片生成", "body": "model, prompt, size, n"},
+    {"method": "POST", "path": "/v1/images/edits", "purpose": "图片编辑", "body": "multipart: model, prompt, image[]"},
+    {"method": "POST", "path": "/v1/videos", "purpose": "视频生成", "body": "multipart: model, prompt, seconds, size"},
+    {"method": "GET", "path": "/v1/videos/{video_id}", "purpose": "查询视频任务", "body": "无"},
+    {"method": "GET", "path": "/v1/videos/{video_id}/content", "purpose": "下载视频文件", "body": "无"},
+)
+
+
+def _model_doc(spec) -> dict[str, Any]:
+    if spec.is_image_edit():
+        capability, capability_key, endpoint = "图片编辑", "edit", "/v1/images/edits"
+    elif spec.is_image():
+        capability, capability_key, endpoint = "图片生成", "image", "/v1/images/generations"
+    elif spec.is_video():
+        capability, capability_key, endpoint = "视频生成", "video", "/v1/videos"
+    else:
+        capability, capability_key, endpoint = "对话", "chat", "/v1/chat/completions"
+
+    pools = " → ".join(_POOL_LABELS[p] for p in spec.pool_candidates())
+    return {
+        "id": spec.model_name,
+        "name": spec.public_name,
+        "capability": capability,
+        "capability_key": capability_key,
+        "mode": spec.mode_id.to_api_str(),
+        "pools": pools,
+        "endpoint": endpoint,
+    }
+
 # Mount sub-modules
 from .tokens import router as _tokens_router  # noqa: E402
 from .batch import router as _batch_router  # noqa: E402
@@ -186,6 +224,21 @@ async def admin_verify():
 async def get_config_endpoint():
     return Response(
         content=orjson.dumps(config.raw()),
+        media_type="application/json",
+    )
+
+
+@router.get("/docs", tags=[_TAG_ADMIN_SYSTEM])
+async def get_docs_endpoint():
+    return Response(
+        content=orjson.dumps(
+            {
+                "endpoints": _DOC_ENDPOINTS,
+                "models": [
+                    _model_doc(model) for model in model_registry.list_enabled()
+                ],
+            }
+        ),
         media_type="application/json",
     )
 
