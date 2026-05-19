@@ -5,7 +5,7 @@ from pathlib import Path
 from fastapi import HTTPException
 from fastapi.responses import HTMLResponse
 
-from app.platform.meta import get_project_version
+from app.platform.meta import get_static_asset_version
 
 
 _VERSION_TOKEN = "{{APP_VERSION}}"
@@ -18,7 +18,7 @@ def serve_static_html(path: Path) -> HTMLResponse:
 
     body = path.read_text(encoding="utf-8")
     if _VERSION_TOKEN in body:
-        body = body.replace(_VERSION_TOKEN, get_project_version())
+        body = body.replace(_VERSION_TOKEN, get_static_asset_version())
 
     return HTMLResponse(body, headers={"Cache-Control": "no-store"})
 

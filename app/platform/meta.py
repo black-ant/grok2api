@@ -7,6 +7,7 @@ import tomllib
 
 _ROOT = Path(__file__).resolve().parents[2]
 _PYPROJECT = _ROOT / "pyproject.toml"
+_STATICS = _ROOT / "app" / "statics"
 
 
 @lru_cache(maxsize=1)
@@ -26,4 +27,20 @@ def get_project_version() -> str:
     return get_project_meta()["version"]
 
 
-__all__ = ["get_project_meta", "get_project_version"]
+@lru_cache(maxsize=1)
+def get_static_asset_version() -> str:
+    """Return a cache-busting version for static asset URLs."""
+    newest_mtime_ns = 0
+    if _STATICS.exists():
+        for path in _STATICS.rglob("*"):
+            try:
+                if path.is_file():
+                    newest_mtime_ns = max(newest_mtime_ns, path.stat().st_mtime_ns)
+            except OSError:
+                continue
+    if newest_mtime_ns <= 0:
+        return get_project_version()
+    return f"{get_project_version()}-{newest_mtime_ns // 1_000_000_000}"
+
+
+__all__ = ["get_project_meta", "get_project_version", "get_static_asset_version"]
