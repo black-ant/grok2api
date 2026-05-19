@@ -561,19 +561,39 @@ window.renderAdminHeader = async function renderAdminHeader() {
     };
   };
 
+  const ensureRequestLogsNav = () => {
+    const nav = mount.querySelector('.admin-nav');
+    if (!nav) return;
+    let link = nav.querySelector('[data-nav="/admin/request-logs"]');
+    if (!link) {
+      link = document.createElement('a');
+      link.href = '/admin/request-logs';
+      link.className = 'admin-nav-link';
+      link.dataset.nav = '/admin/request-logs';
+      link.dataset.i18n = 'header.requestLogs';
+      link.textContent = '请求日志';
+      const configLink = nav.querySelector('[data-nav="/admin/config"]');
+      nav.insertBefore(link, configLink || null);
+    }
+    link.removeAttribute('hidden');
+    link.style.removeProperty('display');
+  };
+
   await loadVersion();
 
   try {
     const cachedHtml = window.__grok2apiAdminHeaderHtml || readSessionCache(HEADER_HTML_CACHE_KEY);
-    if (cachedHtml) {
-      mount.innerHTML = cachedHtml;
-    } else {
-      const res = await fetch('/static/admin/header.html');
+    try {
+      const url = `/static/admin/header.html?v=${encodeURIComponent(scriptVersion)}`;
+      const res = await fetch(url, { cache: 'no-store' });
       if (!res.ok) throw new Error('header unavailable');
       const html = await res.text();
       mount.innerHTML = html;
       window.__grok2apiAdminHeaderHtml = html;
       writeSessionCache(HEADER_HTML_CACHE_KEY, html);
+    } catch (fetchError) {
+      if (!cachedHtml) throw fetchError;
+      mount.innerHTML = cachedHtml;
     }
   } catch {
     mount.innerHTML = `
@@ -638,6 +658,8 @@ window.renderAdminHeader = async function renderAdminHeader() {
         </div>
       </header>`;
   }
+
+  ensureRequestLogsNav();
 
   const active = mount.dataset.active || location.pathname;
   mount.querySelectorAll('[data-nav]').forEach((link) => {
