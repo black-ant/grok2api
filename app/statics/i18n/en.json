@@ -19,6 +19,7 @@
   "header": {
     "docs": "Connection Docs",
     "account": "Account Management",
+    "requestLogs": "Request Logs",
     "config": "Configuration Management",
     "cache": "Cache Management",
     "languageLabel": "Language",

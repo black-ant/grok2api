@@ -30,6 +30,7 @@ from app.platform.config.snapshot import config as _config
 from app.platform.errors import AppError
 from app.platform.meta import get_project_version
 from app.platform.paths import data_path
+from app.platform.request_logging import RequestLogMiddleware
 from app.platform.storage import reconcile_local_media_cache_async
 
 
@@ -339,6 +340,7 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    app.add_middleware(RequestLogMiddleware)
 
     # Ensure config is loaded on every request.
     @app.middleware("http")
@@ -352,6 +354,13 @@ def create_app() -> FastAPI:
     # Global exception handler — converts AppError to JSON.
     @app.exception_handler(AppError)
     async def _app_error_handler(request: Request, exc: AppError):
+        request.state.request_log_error = {
+            "message": exc.message,
+            "type": str(exc.kind),
+            "code": exc.code,
+            "status": exc.status,
+            "details": exc.details,
+        }
         return JSONResponse(exc.to_dict(), status_code=exc.status)
 
     @app.exception_handler(RequestValidationError)
@@ -385,11 +394,24 @@ def create_app() -> FastAPI:
         }
         if param:
             payload["error"]["param"] = param
+        request.state.request_log_error = {
+            "message": message,
+            "type": "invalid_request_error",
+            "code": "invalid_value",
+            "status": 400,
+            "details": {"errors": errors},
+        }
         return JSONResponse(payload, status_code=400)
 
     @app.exception_handler(Exception)
     async def _generic_error_handler(request: Request, exc: Exception):
         logger.exception("unhandled application exception: error={}", exc)
+        request.state.request_log_error = {
+            "message": str(exc),
+            "type": "server_error",
+            "code": "internal_error",
+            "status": 500,
+        }
         return JSONResponse(
             {"error": {"message": "Internal server error", "type": "server_error"}},
             status_code=500,
